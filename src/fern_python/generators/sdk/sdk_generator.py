@@ -1,3 +1,4 @@
+from concurrent.futures import wait, FIRST_EXCEPTION
 from typing import Optional, Sequence, Tuple
 
 import fern.ir.resources as ir_types
@@ -96,7 +97,7 @@ class SdkGenerator(AbstractGenerator):
             ir=ir,
             context=context.pydantic_generator_context,
         )
-        PydanticModelGenerator().generate_types(
+        types_futures = PydanticModelGenerator().generate_types(
             generator_exec_wrapper=generator_exec_wrapper,
             custom_config=self._pydantic_model_custom_config,
             ir=ir,
@@ -114,7 +115,7 @@ class SdkGenerator(AbstractGenerator):
                 project=project,
             )
 
-        self._generate_client_wrapper(
+        client_wrapper_future = generator_exec_wrapper.executor.submit(self._generate_client_wrapper,
             context=context,
             generated_environment=generated_environment,
             generator_exec_wrapper=generator_exec_wrapper,
@@ -130,10 +131,7 @@ class SdkGenerator(AbstractGenerator):
             snippet_regsitry=snippet_registry,
         )
 
-        for subpackage_id in ir.subpackages.keys():
-            subpackage = ir.subpackages[subpackage_id]
-            if subpackage.has_endpoints_in_tree:
-                self._generate_subpackage_client(
+        subpackage_futures = [generator_exec_wrapper.executor.submit(self._generate_subpackage_client,
                     context=context,
                     generator_exec_wrapper=generator_exec_wrapper,
                     subpackage_id=subpackage_id,
@@ -141,16 +139,24 @@ class SdkGenerator(AbstractGenerator):
                     project=project,
                     generated_root_client=generated_root_client,
                     snippet_registry=snippet_registry,
-                )
+                ) for subpackage_id, subpackage in ir.subpackages.items() if subpackage.has_endpoints_in_tree]
 
-        for error in ir.errors.values():
-            self._generate_error(
+        errors_futures = [generator_exec_wrapper.executor.submit(self._generate_error,
                 context=context,
                 ir=ir,
                 generator_exec_wrapper=generator_exec_wrapper,
                 error=error,
                 project=project,
-            )
+            ) for error in ir.errors.values()]
+
+        all_futures = types_futures + [client_wrapper_future] + subpackage_futures + errors_futures
+        for done, not_done in wait(all_futures, return_when=FIRST_EXCEPTION):
+            try:
+                not_done.result()
+            except Exception as e:
+                for future in all_futures:
+                    future.cancel()
+                raise e
 
         context.core_utilities.copy_to_project(project=project)
 

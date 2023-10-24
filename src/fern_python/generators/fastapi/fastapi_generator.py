@@ -1,3 +1,5 @@
+import asyncio
+from concurrent.futures import wait, FIRST_EXCEPTION
 from typing import Tuple
 
 import fern.ir.resources as ir_types
@@ -78,7 +80,7 @@ class FastApiGenerator(AbstractGenerator):
             context=context.pydantic_generator_context,
         )
 
-        PydanticModelGenerator().generate_types(
+        types_futures = PydanticModelGenerator().generate_types(
             generator_exec_wrapper=generator_exec_wrapper,
             custom_config=self._pydantic_model_custom_config,
             ir=ir,
@@ -87,38 +89,45 @@ class FastApiGenerator(AbstractGenerator):
             snippet_registry=snippet_registry,
         )
 
-        for service in ir.services.values():
-            self._generate_service(
+        services_futures = [generator_exec_wrapper.executor.submit(self._generate_service,
                 context=context,
                 ir=ir,
                 generator_exec_wrapper=generator_exec_wrapper,
                 service=service,
                 project=project,
-            )
+            ) for service in ir.services.values()]
 
-        for error in ir.errors.values():
-            self._generate_error(
+        errors_futures = [generator_exec_wrapper.executor.submit(self._generate_error,
                 context=context,
                 ir=ir,
                 generator_exec_wrapper=generator_exec_wrapper,
                 error=error,
                 project=project,
-            )
+            ) for error in ir.errors.values()]
 
-        SecurityFileGenerator(context=context).generate_security_file(
+        security_file_future = generator_exec_wrapper.executor.submit(SecurityFileGenerator(context=context).generate_security_file,
             project=project,
             generator_exec_wrapper=generator_exec_wrapper,
         )
 
-        RegisterFileGenerator(context=context).generate_registry_file(
+        registry_file_future = generator_exec_wrapper.executor.submit(RegisterFileGenerator(context=context).generate_registry_file,
             project=project,
             generator_exec_wrapper=generator_exec_wrapper,
         )
 
-        FernHTTPExceptionGenerator(context=context, custom_config=custom_config).generate(
+        exceptions_file_future = generator_exec_wrapper.executor.submit(FernHTTPExceptionGenerator(context=context, custom_config=custom_config).generate,
             project=project,
             generator_exec_wrapper=generator_exec_wrapper,
         )
+
+        all_futures = types_futures + services_futures + errors_futures + [security_file_future, registry_file_future, exceptions_file_future]
+        for done, not_done in wait(all_futures, return_when=FIRST_EXCEPTION):
+            try:
+                not_done.result()
+            except Exception as e:
+                for future in all_futures:
+                    future.cancel()
+                raise e
 
         context.core_utilities.copy_to_project(project=project)
 
@@ -161,7 +170,7 @@ class FastApiGenerator(AbstractGenerator):
                         source_file=inlined_request_source_file, filepath=inlined_request_filepath
                     )
 
-    def _generate_error(
+    def  _generate_error(
         self,
         context: FastApiGeneratorContext,
         ir: ir_types.IntermediateRepresentation,

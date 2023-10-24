@@ -7,12 +7,15 @@ from fern.generator_exec.resources.config import (
 )
 from fern.generator_exec.resources.logging import GeneratorUpdate, TaskId
 from fern.generator_exec.resources.readme import GenerateReadmeRequest
+from concurrent.futures import Executor, ThreadPoolExecutor
 
 
 class GeneratorExecWrapper:
     def __init__(self, generator_config: GeneratorConfig):
         self.generator_exec_client: typing.Optional[FernGeneratorExec] = None
         self.task_id: typing.Optional[TaskId] = None
+        # TODO(tjb9dc): It would be nice for this to be configurable, namely on multiprocess vs threading and parallelization factor
+        self.executor: Executor = ThreadPoolExecutor(max_workers=10)
         generator_config.environment.visit(local=lambda: (), remote=lambda env: self._init_remote(env))
 
     def _init_remote(self, env: RemoteGeneratorEnvironment) -> None:

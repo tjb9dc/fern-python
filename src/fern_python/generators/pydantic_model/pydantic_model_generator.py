@@ -1,3 +1,4 @@
+from concurrent.futures import Future, wait, FIRST_EXCEPTION
 from typing import Tuple
 
 import fern.ir.resources as ir_types
@@ -57,7 +58,7 @@ class PydanticModelGenerator(AbstractGenerator):
             ir=ir,
             context=context,
         )
-        self.generate_types(
+        type_futures = self.generate_types(
             generator_exec_wrapper=generator_exec_wrapper,
             ir=ir,
             custom_config=custom_config,
@@ -65,6 +66,15 @@ class PydanticModelGenerator(AbstractGenerator):
             context=context,
             snippet_registry=snippet_registry,
         )
+        all_futures = type_futures
+        for done, not_done in wait(all_futures, return_when=FIRST_EXCEPTION):
+            try:
+                not_done.result()
+            except Exception as e:
+                for future in all_futures:
+                    future.cancel()
+                raise e
+
         context.core_utilities.copy_to_project(project=project)
 
     def generate_types(
@@ -76,16 +86,13 @@ class PydanticModelGenerator(AbstractGenerator):
         project: Project,
         context: PydanticGeneratorContext,
         snippet_registry: SnippetRegistry,
-    ) -> None:
-        for type_to_generate in ir.types.values():
-            self._generate_type(
-                project,
+    ) -> list[Future[None]]:
+        return [generator_exec_wrapper.executor.submit(self._generate_type, project=project,
                 type=type_to_generate,
                 generator_exec_wrapper=generator_exec_wrapper,
                 custom_config=custom_config,
                 context=context,
-                snippet_registry=snippet_registry,
-            )
+                snippet_registry=snippet_registry) for type_to_generate in ir.types.values()]
 
     def _generate_type(
         self,
