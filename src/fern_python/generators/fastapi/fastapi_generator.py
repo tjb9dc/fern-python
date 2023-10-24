@@ -121,13 +121,12 @@ class FastApiGenerator(AbstractGenerator):
         )
 
         all_futures = types_futures + services_futures + errors_futures + [security_file_future, registry_file_future, exceptions_file_future]
-        for done, not_done in wait(all_futures, return_when=FIRST_EXCEPTION):
-            try:
-                not_done.result()
-            except Exception as e:
-                for future in all_futures:
-                    future.cancel()
-                raise e
+        done, not_done = wait(all_futures, return_when=FIRST_EXCEPTION)
+        for failure in not_done:
+            for future in all_futures:
+                future.cancel()
+            # Propagate exception
+            failure.result()
 
         context.core_utilities.copy_to_project(project=project)
 

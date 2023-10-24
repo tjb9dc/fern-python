@@ -15,7 +15,7 @@ class GeneratorExecWrapper:
         self.generator_exec_client: typing.Optional[FernGeneratorExec] = None
         self.task_id: typing.Optional[TaskId] = None
         # TODO(tjb9dc): It would be nice for this to be configurable, namely on multiprocess vs threading and parallelization factor
-        self.executor: Executor = ThreadPoolExecutor(max_workers=10)
+        self.executor: Executor = ThreadPoolExecutor()
         generator_config.environment.visit(local=lambda: (), remote=lambda env: self._init_remote(env))
 
     def _init_remote(self, env: RemoteGeneratorEnvironment) -> None:
