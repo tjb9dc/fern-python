@@ -61,7 +61,7 @@ class SourceFileImpl(SourceFile):
         self._imports_manager = ImportsManager(module_path=module_path)
         self._completion_listener = completion_listener
         self._statements: List[TopLevelStatement] = []
-        self._exports: OrderedSet[str] = OrderedSet()
+        self._exports: set[str] = set()
         self._footer_statements: List[TopLevelStatement] = []
         self._dependency_manager = dependency_manager
         self._should_format = should_format
@@ -201,7 +201,7 @@ class SourceFileImpl(SourceFile):
             writer.write_newline_if_last_line_not()
         return writer
 
-    def get_exports(self) -> OrderedSet[str]:
+    def get_exports(self) -> set[str]:
         return self._exports
 
     def _get_all_statements(self) -> List[TopLevelStatement]:
