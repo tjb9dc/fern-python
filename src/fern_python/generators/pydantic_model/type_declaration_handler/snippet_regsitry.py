@@ -565,7 +565,7 @@ class SnippetRegistry:
         context: PydanticGeneratorContext,
         container: ir_types.ExampleContainer,
     ) -> AST.Expression:
-        snippet = container.visit(
+        return container.visit(
             list=lambda list: self._write_list(
                 values=[
                     self._snippet_for_example_type_reference(
@@ -592,7 +592,7 @@ class SnippetRegistry:
                 example_type_reference=optional,
             )
             if optional is not None
-            else None,
+            else AST.Expression("None"),
             map=lambda map: self._write_map(
                 keys=[
                     self._snippet_for_example_type_reference(
@@ -612,9 +612,6 @@ class SnippetRegistry:
                 ],
             ),
         )
-        if snippet is None:
-            raise Exception("internal error: cannot generate snippet - expected an example container but found none")
-        return snippet
 
     def _snippet_for_example_type_reference(
         self,
