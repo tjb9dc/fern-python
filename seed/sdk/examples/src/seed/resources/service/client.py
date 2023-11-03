@@ -74,6 +74,8 @@ class ServiceClient:
                 title="The Boy and the Heron",
                 from_="Hayao Miyazaki",
                 rating=8.0,
+                type="movie",
+                tag="tag-wf9as23d",
             ),
         )
         """
@@ -189,6 +191,8 @@ class AsyncServiceClient:
                 title="The Boy and the Heron",
                 from_="Hayao Miyazaki",
                 rating=8.0,
+                type="movie",
+                tag="tag-wf9as23d",
             ),
         )
         """
